@@ -13,6 +13,14 @@ void init_ports(void);
 void putChar(char data);
 char getChar(void);
 void my_send_string(char * buf);
+void init_PWM(void);
+void moveMotor(void);
+int readController(void);
+int checkDpad(int button, int dpad);
+void dPadTurn(int dpad);
+void displayTurn(int dpad, int turn);
+int checkTurn(int button, int turn);
+
 
 int byte4;
 int byte5;
@@ -43,48 +51,124 @@ int main(void)
 {
 	init_serial();
 	init_ports();
+	init_PWM();
 
-	char buf[70];
-	int temp;
+	int dpad=6;
+	int button;
+	int turn=0;
+
+	char buf2[70];
+
+	moveMotor();
+
 	while (1)
 	{
-		PORTC &= ~(1<<PSatt); //lowers ATT line which starts command sending 
-	
-		ps2_Communicate(0x01); //next 3 lines send Header bytes to controller	
-		temp=ps2_Communicate(0x42); //will return controller type 
-		ps2_Communicate(0x00); //lets AVR know controller is ready for data
-
-		byte4=ps2_Communicate(0x00); //reads first byte of data from controller
-		byte5=ps2_Communicate(0x00); //reads second byte of data from controller
-		byte6=ps2_Communicate(0x00);
-		byte7=ps2_Communicate(0x00);
-
-		sprintf(buf,"Data in byte4: %d , byte5: %d, byte6: %d, b7: %d, controller: %d\n\r",byte4,byte5,byte6,byte7,temp);
-        my_send_string(buf);
-
+		button=readController();
 		
-		_delay_ms(100);
+		dpad=checkDpad(button,dpad);
+		
+		turn=checkTurn(button,turn);
 
-		PORTC |= (1<<PSatt); //raises ATT line after command is done sending
-	
-		displayData(byte5); //lights LED's based on data in Byte 4
-				
-		_delay_ms(100);
+		dPadTurn(dpad);
 
-		//PORTB=0b11000111;
-		//PORTD=0b11100000;
+		displayTurn(dpad,turn); 
 
-		displayData(byte6-1); //lights LED's based on data in Byte 5
-
-		_delay_ms(100);
-
-		//PORTB=0b11000111;
-        //PORTD=0b11100000;
-
+		_delay_ms(500);
 	}
 	
 	return 0;
 }
+
+int checkDpad(int button, int dpad)
+{
+	char buf[70];
+
+	if (button==126)
+	{
+		dpad--;
+	}
+
+	if (button==158)
+	{
+		dpad++;
+	}
+
+	if (dpad>12)
+		dpad=12;
+
+	if (dpad<0)
+		dpad=0;
+
+	sprintf(buf,"Dpad: %d , button: %d, \n\r",dpad,button);
+    my_send_string(buf);
+
+	return dpad;
+}
+
+int checkTurn(int button, int turn)
+{
+	if (button==126)
+        turn=1;
+	else if (button==158)
+        turn=2;
+	else
+		turn=0;
+
+	return turn;
+}
+
+int readController()
+{
+	//char buf[70];
+    int temp;
+
+	PORTC &= ~(1<<PSatt); //lowers ATT line which starts command sending 
+
+    ps2_Communicate(0x01); //next 3 lines send Header bytes to controller   
+    temp=ps2_Communicate(0x42); //will return controller type 
+    ps2_Communicate(0x00); //lets AVR know controller is ready for data
+
+    byte4=ps2_Communicate(0x00);
+    byte5=ps2_Communicate(0x00); //reads first byte of data from controller
+    byte6=ps2_Communicate(0x00); //reads second byte of data from controller
+    byte7=ps2_Communicate(0x00);
+
+    //sprintf(buf,"Data in byte4: %d , byte5: %d, byte6: %d\n\r",byte4,byte5,byte6);
+    //my_send_string(buf);
+
+
+    _delay_ms(100);
+    PORTC |= (1<<PSatt); //raises ATT line after command is done sending
+	
+	return byte4;
+}
+
+void moveMotor()
+{
+	//OCR1A=35;
+
+	//_delay_ms(4000);
+
+	OCR1A=98;
+
+	//_delay_ms(4000);
+
+	//OCR1A=165;
+
+	//_delay_ms(4000);
+
+}
+
+//initializes Ports for non inverting fast PWM w/ prescaler of 64
+void init_PWM(void)
+{
+    TCCR1A |= (1<<COM1A1) | (1<<COM1B1) | (1<<WGM11); //mode 14 needs wgm13,12,11 set (mode 14 is fast PWM)
+  								                      //setting COM1A1 and COM1B1 sets the PWM as non inverting
+    TCCR1B |= (1<<WGM13) | (1<<WGM12) | (1<<CS11) | (1<<CS10); //setting CS11 & CS10 gives a prescaler of 64
+
+    ICR1=2499; //value controls frequency of the PWM, value of 2499 sets frequency to 50Hz(20ms period)
+}
+                           
 
 
 //initializes the serial communication for AVR
@@ -105,11 +189,10 @@ void init_ports(void)
 {
 	ACSR |= (1<<ACD); //disables analog comparator (saves power)
 	
-	DDRB=0b11000001; //PB7-PB6, PB2-PB0 are outputs for LED's
-	DDRD=0b11111000; //PD7-PD5 are outputs for LED's	
-	
+	DDRB=0b00000010; //PB7-PB6, PB0 are outputs for LED's
+	DDRD=0b11110000; //PD7-PD3 are outputs for LED's	
 	DDRC=0b11101011; //Sets ACK and Data to inputs, CMD CLK and ATT are outputs
-
+	PORTD=0b11111111; //turns LEDS off initially
 }
 
 
@@ -146,10 +229,6 @@ void displayData(int data)
 {
 	//turns on corresponding LED based on data from controller
 	//PD3 corresponds to 1st bit in data
-	//if(data & _BV(0))
-	//	PORTD &= ~(1<<3);
-	//else
-	//	PORTD |= (1<<3);
 	if (data==252||data==251)
 		PORTD &= ~(1<<3);
 	else
@@ -157,10 +236,6 @@ void displayData(int data)
 
 
 	//PB6 corresponds to 2nd bit in data
-	//if(data & _BV(1))
-	//	PORTB &= ~(1<<6);
-	//else
-	//	PORTB |= (1<<6);
 	if (data==248)
 		PORTB &= ~(1<<6);
 	else
@@ -168,10 +243,6 @@ void displayData(int data)
 
 
 	//PB7 corresponds to 3rd bit in data
-	//if(data & _BV(2))
-	//	PORTB &= ~(1<<7);
-	//else
-	//	PORTB |= (1<<7);
 	if (data==242)
 		PORTB &= ~(1<<7);
 	else
@@ -179,10 +250,6 @@ void displayData(int data)
 
 
 	//PD5 corresponds to 4th bit in data
-	//if(data & _BV(3))
-	//	PORTD &= ~(1<<5);
-	//else
-	//	PORTD |= (1<<5);
 	if (data==230)
 		PORTD &= ~(1<<5);
 	else
@@ -190,10 +257,6 @@ void displayData(int data)
 
 
 	//PD6 corresponds to 5th bit in data
-	//if(data & _BV(4))
-	//	PORTD &= ~(1<<6);
-	//else
-	//	PORTD |= (1<<6);
 	if (data==206)
 		PORTD &= ~(1<<6);
 	else
@@ -201,10 +264,6 @@ void displayData(int data)
 
 
 	//PD7 corresponds to 6th bit in data
-	//if(data & _BV(5))
-	//	PORTD &= ~(1<<7);
-	//else
-	//	PORTC |= (1<<7);
 	if (data==62)
 		PORTD &= ~(1<<7);
 	else
@@ -212,10 +271,6 @@ void displayData(int data)
 
 
 	//PB0 corresponds to 7th bit in data
-	//if(data & _BV(6))
-	//	PORTB &= ~(1<<0);
-	//else
-	//	PORTB |= (1<<0);
 	if (data==158)
 		PORTB &= ~(1<<0);
 	else
@@ -223,10 +278,6 @@ void displayData(int data)
 
 
 	//PD4 corresponds to 8th bit in data
-	//if(data & _BV(7))
-	//	PORTD &= ~(1<<4);
-	//else 
-	//	PORTD |= (1<<4);
 	if (data==126)
 		PORTD &= ~(1<<4);
 	else
@@ -263,5 +314,93 @@ void my_send_string(char * buf)
     {
         putChar(buf[x]);
     }
+}
+
+//turns the servo motoring by changing OCR1A value based on value of dpad integer
+void dPadTurn(int dpad)
+{
+	if (dpad<0)	//dpad must be between 0 and 12
+		dpad=0;
+	if (dpad>12)
+		dpad=12;
+
+	switch (dpad)
+	{
+		case 0:
+			OCR1A=38;
+			break;
+		case 1:
+            OCR1A=47;
+            break;
+		case 2:
+            OCR1A=58;
+            break;
+		case 3:
+            OCR1A=67;
+            break;
+		case 4:
+            OCR1A=77;
+            break;
+		case 5:
+            OCR1A=89;
+            break;
+		case 6:
+            OCR1A=99;
+            break;
+		case 7:
+            OCR1A=107;
+            break;
+		case 8:
+            OCR1A=118;
+            break;
+		case 9:
+            OCR1A=128;
+            break;
+		case 10:
+            OCR1A=138;
+            break;
+		case 11:
+            OCR1A=149;
+            break;
+		case 12:
+            OCR1A=160;
+            break;
+	}
+}
+
+void displayTurn (int dpad, int turn)
+{
+	int i=0;
+
+	if (turn==1)
+	{
+		for (i=0;i<3;i++)
+		{
+			PORTD=0b10111111;
+			_delay_ms(250);
+			PORTD=0b11111111;
+			_delay_ms(250);
+		}
+	}
+
+	if (turn==2)
+    {
+        for (i=0;i<3;i++)
+        {
+            PORTD=0b11011111;
+            _delay_ms(250);
+            PORTD=0b11111111;
+            _delay_ms(250);
+        }
+    }	
+
+
+	if (dpad<6)
+		PORTD=0b01111111;
+	if (dpad>6)
+		PORTD=0b11101111;
+	if (dpad==6)
+		PORTD=0b11111111;
+
 }
 
