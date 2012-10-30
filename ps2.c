@@ -79,6 +79,9 @@ int main(void)
 	return 0;
 }
 
+//checks if current button press is a left or right dpad press
+//if left is pressed dpad variable decremented, if right pressed it is incremented
+//dpad can only have values between 0 and 12 (with 6 beeing home 0 position)
 int checkDpad(int button, int dpad)
 {
 	char buf[70];
@@ -105,6 +108,8 @@ int checkDpad(int button, int dpad)
 	return dpad;
 }
 
+//function used for displaying current turn with blinking LED
+//returns 1 for left turn, 2 for right turn
 int checkTurn(int button, int turn)
 {
 	if (button==126)
@@ -117,6 +122,7 @@ int checkTurn(int button, int turn)
 	return turn;
 }
 
+//reads button press from user input
 int readController()
 {
 	//char buf[70];
@@ -143,6 +149,7 @@ int readController()
 	return byte4;
 }
 
+//initially set motor to home position
 void moveMotor()
 {
 	//OCR1A=35;
@@ -368,6 +375,8 @@ void dPadTurn(int dpad)
 	}
 }
 
+//displays current position (either left or right) by solid red LED
+//also displays if current turn being made by blinking yellow LED 3 times
 void displayTurn (int dpad, int turn)
 {
 	int i=0;
