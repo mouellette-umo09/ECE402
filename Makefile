@@ -1,8 +1,8 @@
 CC=avr-gcc 
-CFLAGS=-g -Wl,-u,vfprintf -lprintf_flt -lm -Os -Wall -mcall-prologues -mmcu=atmega164p
+CFLAGS=-g -Wl,-u,vfprintf -lprintf_flt -lm -Os -Wall -mcall-prologues -mmcu=atmega16
 OBJ2HEX=avr-objcopy
-TARGET=RC_Car
-ADFLAGS=-p m164 -c avrispmkII -P usb -C ~/ECE402/avrdude.conf -F
+TARGET=ps2
+ADFLAGS=-p m16 -c avrispmkII -P usb
 
 .PHONY: fuses prog erase
 
@@ -25,6 +25,6 @@ erase :
 clean :
 	rm -f *.hex *.obj *.o
 
-#fuses:
-	#avrdude $(ADFLAGS) -U lfuse:w:0xC4:m #http://www.engbedded.com/cgi-bin/fc.cgi
-	#avrdude $(ADFLAGS) -U hfuse:w:0xD9:m 
+fuses:
+	avrdude $(ADFLAGS) -U lfuse:w:0xC4:m #http://www.engbedded.com/cgi-bin/fc.cgi
+	avrdude $(ADFLAGS) -U hfuse:w:0xD9:m 
