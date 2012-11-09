@@ -1,7 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <avr/io.h>
-#include <avr/iom8.h>
+#include <avr/iom16.h>
 #include <avr/interrupt.h>
 #include <stdio.h>
 #include <util/delay.h>
@@ -26,6 +26,8 @@ int byte4;
 int byte5;
 int byte6;
 int byte7;
+int byte8;
+int byte9;
 
 /*Pins for Controller Wires
  *
@@ -59,29 +61,30 @@ int main(void)
 
 	char buf2[70];
 
-	moveMotor();
+	//moveMotor();
 
 	while (1)
 	{
 		button=readController();
+		_delay_ms(1000);
 		
 		dpad=checkDpad(button,dpad);
+		_delay_ms(500);
 		
 		turn=checkTurn(button,turn);
+		_delay_ms(500);
 
 		dPadTurn(dpad);
+		_delay_ms(500);
 
 		displayTurn(dpad,turn); 
-
 		_delay_ms(500);
 	}
+	
 	
 	return 0;
 }
 
-//checks if current button press is a left or right dpad press
-//if left is pressed dpad variable decremented, if right pressed it is incremented
-//dpad can only have values between 0 and 12 (with 6 beeing home 0 position)
 int checkDpad(int button, int dpad)
 {
 	char buf[70];
@@ -102,14 +105,12 @@ int checkDpad(int button, int dpad)
 	if (dpad<0)
 		dpad=0;
 
-	sprintf(buf,"Dpad: %d , button: %d, \n\r",dpad,button);
-    my_send_string(buf);
+	//sprintf(buf,"Dpad: %d , button: %d, \n\r",dpad,button);
+    //my_send_string(buf);
 
 	return dpad;
 }
 
-//function used for displaying current turn with blinking LED
-//returns 1 for left turn, 2 for right turn
 int checkTurn(int button, int turn)
 {
 	if (button==126)
@@ -122,13 +123,12 @@ int checkTurn(int button, int turn)
 	return turn;
 }
 
-//reads button press from user input
-int readController()
+int readController(void)
 {
-	//char buf[70];
+    char buf[70];
     int temp;
 
-	PORTC &= ~(1<<PSatt); //lowers ATT line which starts command sending 
+    PORTC &= ~(1<<PSatt); //lowers ATT line which starts command sending 
 
     ps2_Communicate(0x01); //next 3 lines send Header bytes to controller   
     temp=ps2_Communicate(0x42); //will return controller type 
@@ -138,31 +138,40 @@ int readController()
     byte5=ps2_Communicate(0x00); //reads first byte of data from controller
     byte6=ps2_Communicate(0x00); //reads second byte of data from controller
     byte7=ps2_Communicate(0x00);
+    byte8=ps2_Communicate(0x00);
+    byte9=ps2_Communicate(0x00); //reads first byte of data from controller
+    
+    sprintf(buf,"Data in byte4: %d , byte5: %d, byte6: %d, byte7: %d , byte8: %d, byte9: %d\n\r",byte4,byte5,byte6,byte7,byte8,byte9);
+    my_send_string(buf);
 
-    //sprintf(buf,"Data in byte4: %d , byte5: %d, byte6: %d\n\r",byte4,byte5,byte6);
-    //my_send_string(buf);
 
-
-    _delay_ms(100);
+    _delay_ms(50);
     PORTC |= (1<<PSatt); //raises ATT line after command is done sending
 	
-	return byte4;
+    return byte4;
 }
 
-//initially set motor to home position
 void moveMotor()
 {
-	//OCR1A=35;
+	//OCR1A=100;
 
 	//_delay_ms(4000);
 
-	OCR1A=98;
+	OCR1A=400;
 
-	//_delay_ms(4000);
+	_delay_ms(2000);
 
-	//OCR1A=165;
+	OCR1A=150;
 
-	//_delay_ms(4000);
+	_delay_ms(2000);
+	
+	OCR1A=350;
+
+	_delay_ms(2000);
+
+	OCR1A=200;
+
+	_delay_ms(2000);
 
 }
 
@@ -181,7 +190,7 @@ void init_PWM(void)
 //initializes the serial communication for AVR
 void init_serial(void)
 {
-	UBRRH=0;
+    UBRRH=0;
     UBRRL=103;
     UCSRA=2; //sets baud to 9600 for 8MHz clock
 
@@ -196,10 +205,8 @@ void init_ports(void)
 {
 	ACSR |= (1<<ACD); //disables analog comparator (saves power)
 	
-	DDRB=0b00000010; //PB7-PB6, PB0 are outputs for LED's
-	DDRD=0b11110000; //PD7-PD3 are outputs for LED's	
+	DDRD=0b00100000; //OCR1A as output for motor control	
 	DDRC=0b11101011; //Sets ACK and Data to inputs, CMD CLK and ATT are outputs
-	PORTD=0b11111111; //turns LEDS off initially
 }
 
 
@@ -375,8 +382,6 @@ void dPadTurn(int dpad)
 	}
 }
 
-//displays current position (either left or right) by solid red LED
-//also displays if current turn being made by blinking yellow LED 3 times
 void displayTurn (int dpad, int turn)
 {
 	int i=0;
