@@ -4,6 +4,8 @@ OBJ2HEX=avr-objcopy
 TARGET=ps2
 ADFLAGS=-p m16 -c avrispmkII -P usb
 
+OBJS=ps2.o LCD.o
+
 .PHONY: fuses prog erase
 
 
@@ -11,14 +13,17 @@ prog : $(TARGET).hex $(TARGET).eeprom
 	avrdude $(ADFLAGS) -V -U flash:w:$(TARGET).hex:i
 	avrdude $(ADFLAGS) -U eeprom:w:$(TARGET).eeprom:i
 
-%.obj : %.o
-	$(CC) $(CFLAGS) $< -o $@
+ps2.obj : ${OBJS}
+	$(CC) $(CFLAGS) ${OBJS} -o ${TARGET}.obj
 
 %.hex : %.obj
 	$(OBJ2HEX) -R .eeprom -O ihex $< $@
 
 %.eeprom : %.obj
 	$(OBJ2HEX) -j .eeprop -O ihex $< $@
+
+LCD.o : LCD.h
+
 
 erase :
 	avrdude $(ADFLAGS) -E noreset -e

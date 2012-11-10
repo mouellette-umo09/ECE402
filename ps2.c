@@ -5,6 +5,8 @@
 #include <avr/interrupt.h>
 #include <stdio.h>
 #include <util/delay.h>
+#include "LCD.h"
+
 
 void displayData(int data); 
 int ps2_Communicate(int output);
@@ -20,7 +22,19 @@ int checkDpad(int button, int dpad);
 void dPadTurn(int dpad);
 void displayTurn(int dpad, int turn);
 int checkTurn(int button, int turn);
+void init_A2D(void);
+void init_timer2(void);
+int getADC(void);
 
+volatile int overflows; //counts number of overflows
+volatile int secondFlag;//flag that goes high every second
+volatile int average; //past 16 averaged ADC values
+volatile int finalAverage;//averaged ADC value to pass to PC
+volatile int seconds;//time in seconds for timestamping data
+double voltage;//voltage read to pass to PC
+double temperature; //temp to pass to PC (from finalAverage)
+volatile int samplecounter; //counts up to 16 for average of values
+volatile int values[16];
 
 int byte4;
 int byte5;
@@ -28,6 +42,8 @@ int byte6;
 int byte7;
 int byte8;
 int byte9;
+
+
 
 /*Pins for Controller Wires
  *
@@ -54,35 +70,87 @@ int main(void)
 	init_serial();
 	init_ports();
 	init_PWM();
+	init_A2D();
+	init_timer2();
+	
+	init_LCDports();
+	_delay_ms(50);
+	init_LCD();
+	
+	LCD_position(1,2);
+	LCD_print("Desired");
+	
+	LCD_position(2,2);
+	LCD_print("Actual");
 
 	int dpad=6;
 	int button;
 	int turn=0;
 
 	char buf2[70];
+	char buf[100];
+	samplecounter=0;
+	voltage=0;
+	temperature=0;
+	finalAverage=0;
+	seconds=0;//variable to hold the current second being passed
+	secondFlag=0;
+	int value;
+	
+	//sei();
 
 	//moveMotor();
 
 	while (1)
 	{
-		button=readController();
-		_delay_ms(1000);
+		//button=readController();
+		//_delay_ms(1000);
 		
-		dpad=checkDpad(button,dpad);
-		_delay_ms(500);
+		//dpad=checkDpad(button,dpad);
+		//_delay_ms(500);
 		
-		turn=checkTurn(button,turn);
-		_delay_ms(500);
+		//turn=checkTurn(button,turn);
+		//_delay_ms(500);
 
-		dPadTurn(dpad);
-		_delay_ms(500);
+		//dPadTurn(dpad);
+		//_delay_ms(500);
 
-		displayTurn(dpad,turn); 
-		_delay_ms(500);
+		//displayTurn(dpad,turn); 
+		//_delay_ms(500);
+		
+		//if (secondFlag==1)
+		//{
+			//voltage=(((double)finalAverage)*1.94)/1024;
+			//calculates temperature from voltage
+
+			//send data serially
+			//sprintf(buf,"%d,%d,%lf\n\r",seconds,finalAverage,voltage);
+			
+			//sprintf(buf2,"Sec: %d ADC: %d\n\r",seconds,finalAverage);
+			//my_send_string(buf);	
+
+			//secondFlag=0;	
+			//}
+			//value=getADC();
+			//sprintf(buf,"%d,\n\r",value);
+			//my_send_string(buf);
+			
+			
 	}
 	
 	
 	return 0;
+}
+
+int getADC()
+{
+		ADCSRA |= (1<<ADSC);
+		
+		while (!(ADCSRA & (1<<ADIF)));
+		
+		ADCSRA|=(1<<ADIF);
+		
+		return ADC;
 }
 
 int checkDpad(int button, int dpad)
@@ -155,23 +223,15 @@ void moveMotor()
 {
 	//OCR1A=100;
 
-	//_delay_ms(4000);
-
-	OCR1A=400;
-
-	_delay_ms(2000);
-
-	OCR1A=150;
-
-	_delay_ms(2000);
+	//_delay_ms(100000);
 	
-	OCR1A=350;
+	OCR1A=190;
 
-	_delay_ms(2000);
+	_delay_ms(100000);
+	
+	//OCR1A=300;
 
-	OCR1A=200;
-
-	_delay_ms(2000);
+	//_delay_ms(100000);
 
 }
 
@@ -202,11 +262,36 @@ void init_serial(void)
 
 //sets up ports for
 void init_ports(void)
-{
-	ACSR |= (1<<ACD); //disables analog comparator (saves power)
-	
+{	
 	DDRD=0b00100000; //OCR1A as output for motor control	
 	DDRC=0b11101011; //Sets ACK and Data to inputs, CMD CLK and ATT are outputs
+	DDRA=0b00000000;
+}
+
+//sets up registers for adc conversions
+void init_A2D(void)
+{
+	ADCSRA |= (1<<ADPS2)|(1<<ADPS1)|(1<<ADPS0) ; //sets prescaler to 64 (125kHz for 8MHz clock)
+	ADMUX = 0x00; //sets ADC reference voltage to AREF, and input to ADC0 (PA0)
+	//ADCSRA |= (1<<ADIE); //enables interrupts for conversion
+	ADCSRA |= (1<<ADEN); //enables conversions
+	//ADCSRA |= (1<<ADATE); //enables free running mode to be used
+	SFIOR = 0x00;        //sets ADC to free running mode
+	ADCSRA |= (1<<ADSC); //starts conversions
+
+}
+
+//initializes flags for timer 2
+void init_timer2(void)
+{
+	TCCR2 |= (1<<WGM21); //sets timer2 in CTC mode
+	//TCCR2 |= (1<<CS22); //sets prescaler to 64(for 1MHz clock)
+	TCCR2 |= (1<<CS22) | (1<<CS21); //sets prescaler to 256 (for 8MHz clock)
+	TCNT2=0; //initializes counter
+	TIMSK |= (1<<OCIE2); //enables compare match interrupt
+	OCR2=125; //sets CTC compare value to 125
+	overflows=0; //initializes overflow counter variable
+
 }
 
 
@@ -417,4 +502,46 @@ void displayTurn (int dpad, int turn)
 		PORTD=0b11111111;
 
 }
+
+
+//interrupt service routine to handle timing
+ISR(TIMER2_COMP_vect)
+{
+	overflows++;
+	//when 250 overflows are done then a second has passed
+	//so data will be sent serially at this point
+	if (overflows>=250)//should be 125(1MHz) 250 at 8MHz
+	{
+		finalAverage=average;
+		secondFlag=1;
+		overflows=0;
+		seconds++;//counts up seconds for output to file
+		
+	}	
+
+}
+
+
+//interrupt to run when each A2D conversion is done
+ISR(ADC_vect)
+{
+	int reading,i;
+	reading=(ADCH<<8)+ADCL;//stores value from  A/D conversion
+
+	//samplecounter++;//increments through 16 values
+	//samplecounter&=0xF; //makes sure values go from 0-15
+
+	//values[samplecounter]=reading;//stores current ADC value
+	//average=0;//resets average to 0 for each interrupt
+
+	//for (i=0;i<16;i++)
+	//{
+	//	average+=values[i];//adds up past 16 values
+	//}
+	//average>>=4; //divides by 16 to get average value
+	 
+	finalAverage=reading;  
+}
+
+
 

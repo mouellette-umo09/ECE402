@@ -5,63 +5,18 @@
 #include <avr/interrupt.h>
 #include <stdio.h>
 #include <util/delay.h>
-
-
-#define LCD_DATA PORTA
-#define ctrl PORTC
-#define enable PC7
-#define RW PC6
-#define RS PC5
-
-#define LCDClr 0x01  //clears lcd
-#define LCDEightbit 0x38; //sets up 8 bit data transfer for LCD
-#define LCD_line1 0x80; //goes to first line of LCD
-#define LCD_line2 0xC0; //goes to second line of LCD
-#define cursorOn 0x0E; //turns cursor on
-
-void LCD_cmd(unsigned char cmd);
-void init_LCD(void);
-void LCD_data(unsigned char data);
-void init_ports(void);
-void LCD_print (char *string);
-void LCD_position (unsigned char row, unsigned char col);
-
-
-
-int main(void)
-{
-	init_ports();
-	
-	_delay_ms(50);
-	
-	init_LCD();  //sets up LCD
-	
-	LCD_position(1,2);
-	LCD_print("Desired");
-	
-	LCD_position(2,2);
-	LCD_print("Actual");
-
-
-	
-	return 0;
-}
-
+#include "LCD.h"
 
 
 void init_LCD(void)
 {
-	LCD_cmd(0x38);
+	dis_cmd(0x02); //sets in 4 bit mode
+	_delay_ms(1);
+
+	dis_cmd(0x28); //sets in 2 line mode
 	_delay_ms(1);
 	
-	
-	LCD_cmd(0x01);
-	_delay_ms(1);
-	
-	LCD_cmd(0x0E);
-	_delay_ms(1);
-	
-	LCD_cmd(0x80);
+	dis_cmd(0x80);  //turns on LCD
 	_delay_ms(1);
 }
 
@@ -94,7 +49,7 @@ void LCD_print (char *input)
 	
 	while (input[i]!=0)
 	{
-		LCD_data(input[i]);
+		dis_data(input[i]);
 		i++;
 	}
 }
@@ -104,29 +59,49 @@ void LCD_position (unsigned char row, unsigned char col)
 	if (row==1)
 	{
 		row=0x80;
-		LCD_cmd(row+(col-1));
+		dis_cmd(row+(col-1));
 	}	
 	
 	if (row==2)
 	{
 		row=0xC0;
-		LCD_cmd(row+(col-1));
+		dis_cmd(row+(col-1));
 	}	
 	
 	
 }
 
-//sets up ports for
-void init_ports(void)
+void dis_cmd(unsigned char cmd)
 {
-	ACSR |= (1<<ACD); //disables analog comparator (saves power)
+	char cmd1;
 	
-	//DDRB=0b00000010; //PB7-PB6, PB0 are outputs for LED's
-	//DDRD=0b11110000; //PD7-PD3 are outputs for LED's	
-	//PORTD=0b11111111; //turns LEDS off initially
-	DDRA=0b11111111; //data lines are all outputs
+	cmd1=cmd&0xF0; //takes higher nibble to send to LCD for 4 bit mode
+	LCD_cmd(cmd1);
+	
+	cmd1=(cmd<<4)&0xF0; //takes lower nibble to send to LCd
+	LCD_cmd(cmd1);
+
+}
+
+void dis_data(unsigned char data)
+{
+	char data1;
+	
+	data1=data&0xF0; //takes higher nibble to send to LCD for 4 bit mode
+	LCD_data(data1);
+	
+	data1=(data<<4)&0xF0; //takes lower nibble to send to LCd
+	LCD_data(data1);
+
+
+}
+
+//sets up ports for LCD
+void init_LCDports(void)
+{
+	DDRA|= 0b11110000; //data lines are all outputs
 	DDRC = 0b11101011; //LCD control lines are outputs
-	LCD_DATA=0x00; //data originally set to 0
-	ctrl=0x00;
+	//LCD_DATA=0x00; //data originally set to 0
+	//ctrl=0x00;
 }
 
