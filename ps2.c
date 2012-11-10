@@ -35,6 +35,7 @@ double voltage;//voltage read to pass to PC
 double temperature; //temp to pass to PC (from finalAverage)
 volatile int samplecounter; //counts up to 16 for average of values
 volatile int values[16];
+double degree; //converts voltage ADC measurement to degree value
 
 int byte4;
 int byte5;
@@ -67,74 +68,81 @@ int byte9;
 
 int main(void)
 {
+	//functions to initialize avr for all functions
 	init_serial();
 	init_ports();
 	init_PWM();
 	init_A2D();
 	init_timer2();
-	
 	init_LCDports();
+	
 	_delay_ms(50);
+	//initializes LCD for communication
 	init_LCD();
 	
+	//sets up LCD initially with Desired on top line and Actual on second line
 	LCD_position(1,2);
-	LCD_print("Desired");
+	LCD_print("des:");
 	
 	LCD_position(2,2);
-	LCD_print("Actual");
-
-	int dpad=6;
+	LCD_print("act:");
+	
+	_delay_ms(100);
+	
+	int dpad=7;
 	int button;
 	int turn=0;
 
 	char buf2[70];
 	char buf[100];
+	
 	samplecounter=0;
 	voltage=0;
 	temperature=0;
 	finalAverage=0;
 	seconds=0;//variable to hold the current second being passed
 	secondFlag=0;
+	degree=90;
+	
 	int value;
 	
-	//sei();
+	sei();
 
-	//moveMotor();
+	moveMotor();
 
 	while (1)
 	{
-		//button=readController();
-		//_delay_ms(1000);
+		button=readController();
+		_delay_ms(1000);
 		
-		//dpad=checkDpad(button,dpad);
-		//_delay_ms(500);
+		dpad=checkDpad(button,dpad);
+		_delay_ms(500);
 		
 		//turn=checkTurn(button,turn);
 		//_delay_ms(500);
 
-		//dPadTurn(dpad);
-		//_delay_ms(500);
+		dPadTurn(dpad);
+		_delay_ms(500);
 
-		//displayTurn(dpad,turn); 
-		//_delay_ms(500);
 		
-		//if (secondFlag==1)
-		//{
-			//voltage=(((double)finalAverage)*1.94)/1024;
-			//calculates temperature from voltage
+		if (secondFlag==1)
+		{
+			voltage=(((double)finalAverage)*1.94)/1024;
+			degree=voltage*141.88-70;
+			
 
 			//send data serially
 			//sprintf(buf,"%d,%d,%lf\n\r",seconds,finalAverage,voltage);
-			
-			//sprintf(buf2,"Sec: %d ADC: %d\n\r",seconds,finalAverage);
-			//my_send_string(buf);	
-
-			//secondFlag=0;	
-			//}
-			//value=getADC();
-			//sprintf(buf,"%d,\n\r",value);
 			//my_send_string(buf);
 			
+			sprintf(buf2,"a: %lf",degree);
+			LCD_position(2,2);
+			LCD_print(buf2);	
+
+			secondFlag=0;	
+		}
+		
+		value=getADC();			
 			
 	}
 	
@@ -144,13 +152,30 @@ int main(void)
 
 int getADC()
 {
-		ADCSRA |= (1<<ADSC);
+	ADCSRA |= (1<<ADSC);
+	
+	while (!(ADCSRA & (1<<ADIF)));
+	
+	ADCSRA|=(1<<ADIF);
 		
-		while (!(ADCSRA & (1<<ADIF)));
-		
-		ADCSRA|=(1<<ADIF);
-		
-		return ADC;
+	int reading,i;
+	reading=(ADCH<<8)+ADCL;//stores value from  A/D conversion
+
+	samplecounter++;//increments through 16 values
+	samplecounter&=0xF; //makes sure values go from 0-15
+
+	values[samplecounter]=reading;//stores current ADC value
+	average=0;//resets average to 0 for each interrupt
+
+	for (i=0;i<16;i++)
+	{
+		average+=values[i];//adds up past 16 values
+	}
+	average>>=4; //divides by 16 to get average value
+	
+	finalAverage=ADC; 
+	
+	return ADC;
 }
 
 int checkDpad(int button, int dpad)
@@ -167,14 +192,14 @@ int checkDpad(int button, int dpad)
 		dpad++;
 	}
 
-	if (dpad>12)
-		dpad=12;
+	if (dpad>14)
+		dpad=14;
 
 	if (dpad<0)
 		dpad=0;
 
-	//sprintf(buf,"Dpad: %d , button: %d, \n\r",dpad,button);
-    //my_send_string(buf);
+	sprintf(buf,"Dpad: %d , button: %d, \n\r",dpad,button);
+    my_send_string(buf);
 
 	return dpad;
 }
@@ -209,29 +234,20 @@ int readController(void)
     byte8=ps2_Communicate(0x00);
     byte9=ps2_Communicate(0x00); //reads first byte of data from controller
     
-    sprintf(buf,"Data in byte4: %d , byte5: %d, byte6: %d, byte7: %d , byte8: %d, byte9: %d\n\r",byte4,byte5,byte6,byte7,byte8,byte9);
-    my_send_string(buf);
+    //sprintf(buf,"Data in byte4: %d , byte5: %d, byte6: %d, byte7: %d , byte8: %d, byte9: %d\n\r",byte4,byte5,byte6,byte7,byte8,byte9);
+    //my_send_string(buf);
 
 
     _delay_ms(50);
     PORTC |= (1<<PSatt); //raises ATT line after command is done sending
 	
-    return byte4;
+    return byte5;
 }
 
 void moveMotor()
 {
-	//OCR1A=100;
 
-	//_delay_ms(100000);
-	
-	OCR1A=190;
-
-	_delay_ms(100000);
-	
-	//OCR1A=300;
-
-	//_delay_ms(100000);
+	OCR1A=196;
 
 }
 
@@ -265,7 +281,6 @@ void init_ports(void)
 {	
 	DDRD=0b00100000; //OCR1A as output for motor control	
 	DDRC=0b11101011; //Sets ACK and Data to inputs, CMD CLK and ATT are outputs
-	DDRA=0b00000000;
 }
 
 //sets up registers for adc conversions
@@ -323,68 +338,6 @@ int ps2_Communicate(int output)
 }
 
 
-//based on output from controller lights up LEDs
-void displayData(int data)
-{
-	//turns on corresponding LED based on data from controller
-	//PD3 corresponds to 1st bit in data
-	if (data==252||data==251)
-		PORTD &= ~(1<<3);
-	else
-		PORTD |= (1<<3);
-
-
-	//PB6 corresponds to 2nd bit in data
-	if (data==248)
-		PORTB &= ~(1<<6);
-	else
-		PORTB |= (1<<6);
-
-
-	//PB7 corresponds to 3rd bit in data
-	if (data==242)
-		PORTB &= ~(1<<7);
-	else
-		PORTB |= (1<<7);
-
-
-	//PD5 corresponds to 4th bit in data
-	if (data==230)
-		PORTD &= ~(1<<5);
-	else
-		PORTD |= (1<<5);
-
-
-	//PD6 corresponds to 5th bit in data
-	if (data==206)
-		PORTD &= ~(1<<6);
-	else
-		PORTD |= (1<<6);
-
-
-	//PD7 corresponds to 6th bit in data
-	if (data==62)
-		PORTD &= ~(1<<7);
-	else
-		PORTD |= (1<<7);
-
-
-	//PB0 corresponds to 7th bit in data
-	if (data==158)
-		PORTB &= ~(1<<0);
-	else
-		PORTB |= (1<<0);
-
-
-	//PD4 corresponds to 8th bit in data
-	if (data==126)
-		PORTD &= ~(1<<4);
-	else
-		PORTD |= (1<<4);
-
-
-}
-
 
 //puts a char to serial line
 void putChar(char data)
@@ -418,55 +371,108 @@ void my_send_string(char * buf)
 //turns the servo motoring by changing OCR1A value based on value of dpad integer
 void dPadTurn(int dpad)
 {
+	char buf2[70];
+	
 	if (dpad<0)	//dpad must be between 0 and 12
 		dpad=0;
-	if (dpad>12)
-		dpad=12;
+	if (dpad>14)
+		dpad=14;
 
 	switch (dpad)
 	{
+		//OCR1A value for 62 degrees
 		case 0:
-			OCR1A=38;
-			break;
+	    OCR1A=165;
+	    LCD_position(1,2);
+	    LCD_print("d: -28");
+	    break;
+	    	//OCR1A value for 66 degrees
 		case 1:
-            OCR1A=47;
+	    LCD_position(1,2);
+	    LCD_print("d: -24");
+            OCR1A=170;
             break;
+	    	//OCR1A value for 70 degrees
 		case 2:
-            OCR1A=58;
+	    LCD_position(1,2);
+	    LCD_print("d: -20");
+            OCR1A=174;
             break;
+	    	//OCR1A value for 74 degrees
 		case 3:
-            OCR1A=67;
+	    LCD_position(1,2);
+	    LCD_print("d: -16");
+            OCR1A=178;
             break;
+	    	//OCR1A value for 78 degrees
 		case 4:
-            OCR1A=77;
+	    LCD_position(1,2);
+	    LCD_print("d: -12");
+            OCR1A=183;
             break;
+	    	//OCR1A value for 82 degrees
 		case 5:
-            OCR1A=89;
+	    LCD_position(1,2);
+	    LCD_print("d: -8");
+            OCR1A=187;
             break;
+	    	//OCR1A value for 86 degrees
 		case 6:
-            OCR1A=99;
+	    LCD_position(1,2);
+	    LCD_print("d: -4");
+            OCR1A=191;
             break;
+	    	//OCR1A value for 90 degrees
 		case 7:
-            OCR1A=107;
+	    LCD_position(1,2);
+	    LCD_print("d: 0");
+            OCR1A=196;
             break;
+	    	//OCR1A value for 94 degrees
 		case 8:
-            OCR1A=118;
+	    LCD_position(1,2);
+	    LCD_print("d: 4");
+            OCR1A=200;
             break;
+	    	//OCR1A value for 98 degrees
 		case 9:
-            OCR1A=128;
+            LCD_position(1,2);
+	    LCD_print("d: 8");
+            OCR1A=205;
             break;
+	    	//OCR1A value for 102 degrees
 		case 10:
-            OCR1A=138;
+	    LCD_position(1,2);
+	    LCD_print("d: 12");
+            OCR1A=210;
             break;
+	    	//OCR1A value for 106 degrees
 		case 11:
-            OCR1A=149;
+	    LCD_position(1,2);
+	    LCD_print("d: 16");
+            OCR1A=216;
             break;
+	    	//OCR1A value for 110 degrees
 		case 12:
-            OCR1A=160;
+	    LCD_position(1,2);
+	    LCD_print("d: 20");
+            OCR1A=222;
+            break;
+	    	//OCR1A value for 114 degrees
+	    	case 13:
+	    LCD_position(1,2);
+	    LCD_print("d: 24");
+            OCR1A=228;
+            break;
+	    	//OCR1A value for 118 degrees
+	    	case 14:
+	    LCD_position(1,2);
+	    LCD_print("d: 28");
+            OCR1A=235;
             break;
 	}
 }
-
+/*
 void displayTurn (int dpad, int turn)
 {
 	int i=0;
@@ -502,7 +508,7 @@ void displayTurn (int dpad, int turn)
 		PORTD=0b11111111;
 
 }
-
+*/
 
 //interrupt service routine to handle timing
 ISR(TIMER2_COMP_vect)
@@ -519,28 +525,6 @@ ISR(TIMER2_COMP_vect)
 		
 	}	
 
-}
-
-
-//interrupt to run when each A2D conversion is done
-ISR(ADC_vect)
-{
-	int reading,i;
-	reading=(ADCH<<8)+ADCL;//stores value from  A/D conversion
-
-	//samplecounter++;//increments through 16 values
-	//samplecounter&=0xF; //makes sure values go from 0-15
-
-	//values[samplecounter]=reading;//stores current ADC value
-	//average=0;//resets average to 0 for each interrupt
-
-	//for (i=0;i<16;i++)
-	//{
-	//	average+=values[i];//adds up past 16 values
-	//}
-	//average>>=4; //divides by 16 to get average value
-	 
-	finalAverage=reading;  
 }
 
 
