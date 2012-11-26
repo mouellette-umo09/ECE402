@@ -36,6 +36,7 @@ double temperature; //temp to pass to PC (from finalAverage)
 volatile int samplecounter; //counts up to 16 for average of values
 volatile int values[16];
 double degree; //converts voltage ADC measurement to degree value
+double desired;
 
 int byte4;
 int byte5;
@@ -82,10 +83,10 @@ int main(void)
 	
 	//sets up LCD initially with Desired on top line and Actual on second line
 	LCD_position(1,2);
-	LCD_print("des:");
+	LCD_print("d:");
 	
 	LCD_position(2,2);
-	LCD_print("act:");
+	LCD_print("a:");
 	
 	_delay_ms(100);
 	
@@ -103,6 +104,7 @@ int main(void)
 	seconds=0;//variable to hold the current second being passed
 	secondFlag=0;
 	degree=90;
+	desired=90;
 	
 	int value;
 	
@@ -128,9 +130,8 @@ int main(void)
 		if (secondFlag==1)
 		{
 			voltage=(((double)finalAverage)*1.94)/1024;
-			degree=voltage*141.88-70;
+			degree=voltage*139.96-73.7;
 			
-
 			//send data serially
 			//sprintf(buf,"%d,%d,%lf\n\r",seconds,finalAverage,voltage);
 			//my_send_string(buf);
@@ -198,8 +199,8 @@ int checkDpad(int button, int dpad)
 	if (dpad<0)
 		dpad=0;
 
-	sprintf(buf,"Dpad: %d , button: %d, \n\r",dpad,button);
-    my_send_string(buf);
+	//sprintf(buf,"Dpad: %d , button: %d, \n\r",dpad,button);
+        //my_send_string(buf);
 
 	return dpad;
 }
@@ -241,7 +242,7 @@ int readController(void)
     _delay_ms(50);
     PORTC |= (1<<PSatt); //raises ATT line after command is done sending
 	
-    return byte5;
+    return byte4;
 }
 
 void moveMotor()
@@ -382,133 +383,112 @@ void dPadTurn(int dpad)
 	{
 		//OCR1A value for 62 degrees
 		case 0:
+	    desired=62;
 	    OCR1A=165;
 	    LCD_position(1,2);
-	    LCD_print("d: -28");
+	    LCD_print("d: 62 ");
 	    break;
 	    	//OCR1A value for 66 degrees
 		case 1:
+	    desired=66;
 	    LCD_position(1,2);
-	    LCD_print("d: -24");
+	    LCD_print("d: 66 ");
             OCR1A=170;
             break;
 	    	//OCR1A value for 70 degrees
 		case 2:
 	    LCD_position(1,2);
-	    LCD_print("d: -20");
+	    desired=70;
+	    LCD_print("d: 70 ");
             OCR1A=174;
             break;
 	    	//OCR1A value for 74 degrees
 		case 3:
 	    LCD_position(1,2);
-	    LCD_print("d: -16");
+	    desired=74;
+	    LCD_print("d: 74 ");
             OCR1A=178;
             break;
 	    	//OCR1A value for 78 degrees
 		case 4:
 	    LCD_position(1,2);
-	    LCD_print("d: -12");
+	    desired=78;
+	    LCD_print("d: 78 ");
             OCR1A=183;
             break;
 	    	//OCR1A value for 82 degrees
 		case 5:
 	    LCD_position(1,2);
-	    LCD_print("d: -8");
+	    desired=82;
+	    LCD_print("d: 82 ");
             OCR1A=187;
             break;
 	    	//OCR1A value for 86 degrees
 		case 6:
 	    LCD_position(1,2);
-	    LCD_print("d: -4");
+	    desired=86;
+	    LCD_print("d: 86 ");
             OCR1A=191;
             break;
 	    	//OCR1A value for 90 degrees
 		case 7:
 	    LCD_position(1,2);
-	    LCD_print("d: 0");
-            OCR1A=196;
+	    desired=90;
+	    LCD_print("d: 90 ");
+            OCR1A=195;
             break;
 	    	//OCR1A value for 94 degrees
 		case 8:
 	    LCD_position(1,2);
-	    LCD_print("d: 4");
+	    desired=94;
+	    LCD_print("d: 94 ");
             OCR1A=200;
             break;
 	    	//OCR1A value for 98 degrees
 		case 9:
             LCD_position(1,2);
-	    LCD_print("d: 8");
+	    desired=98;
+	    LCD_print("d: 98 ");
             OCR1A=205;
             break;
 	    	//OCR1A value for 102 degrees
 		case 10:
 	    LCD_position(1,2);
-	    LCD_print("d: 12");
+	    desired=102;
+	    LCD_print("d: 102 ");
             OCR1A=210;
             break;
 	    	//OCR1A value for 106 degrees
 		case 11:
 	    LCD_position(1,2);
-	    LCD_print("d: 16");
+	    desired=106;
+	    LCD_print("d: 106 ");
             OCR1A=216;
             break;
 	    	//OCR1A value for 110 degrees
 		case 12:
 	    LCD_position(1,2);
-	    LCD_print("d: 20");
+	    desired=110;
+	    LCD_print("d: 110 ");
             OCR1A=222;
             break;
 	    	//OCR1A value for 114 degrees
 	    	case 13:
 	    LCD_position(1,2);
-	    LCD_print("d: 24");
+	    desired=114;
+	    LCD_print("d: 114 ");
             OCR1A=228;
             break;
 	    	//OCR1A value for 118 degrees
 	    	case 14:
 	    LCD_position(1,2);
-	    LCD_print("d: 28");
-            OCR1A=235;
+	    desired=118;
+	    LCD_print("d: 118 ");
+            OCR1A=233;
             break;
 	}
 }
-/*
-void displayTurn (int dpad, int turn)
-{
-	int i=0;
 
-	if (turn==1)
-	{
-		for (i=0;i<3;i++)
-		{
-			PORTD=0b10111111;
-			_delay_ms(250);
-			PORTD=0b11111111;
-			_delay_ms(250);
-		}
-	}
-
-	if (turn==2)
-    {
-        for (i=0;i<3;i++)
-        {
-            PORTD=0b11011111;
-            _delay_ms(250);
-            PORTD=0b11111111;
-            _delay_ms(250);
-        }
-    }	
-
-
-	if (dpad<6)
-		PORTD=0b01111111;
-	if (dpad>6)
-		PORTD=0b11101111;
-	if (dpad==6)
-		PORTD=0b11111111;
-
-}
-*/
 
 //interrupt service routine to handle timing
 ISR(TIMER2_COMP_vect)
@@ -516,7 +496,7 @@ ISR(TIMER2_COMP_vect)
 	overflows++;
 	//when 250 overflows are done then a second has passed
 	//so data will be sent serially at this point
-	if (overflows>=250)//should be 125(1MHz) 250 at 8MHz
+	if (overflows>=500)//should be 125(1MHz) 250 at 8MHz
 	{
 		finalAverage=average;
 		secondFlag=1;

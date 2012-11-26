@@ -10,10 +10,16 @@
 
 void init_LCD(void)
 {
-	dis_cmd(0x02); //sets in 4 bit mode
+	dis_cmd(0x02);  //sets in 4 bit mode
 	_delay_ms(1);
 
-	dis_cmd(0x28); //sets in 2 line mode
+	dis_cmd(0x28);  //sets in 2 line mode
+	_delay_ms(1);
+	
+	dis_cmd(0x01);  //clears LCD
+	_delay_ms(1);
+	
+	dis_cmd(0x0E);  //turns cursor on
 	_delay_ms(1);
 	
 	dis_cmd(0x80);  //turns on LCD
@@ -45,7 +51,7 @@ void LCD_data (unsigned char data)
 
 void LCD_print (char *input)
 {
-	unsigned char i;
+	unsigned char i=0;
 	
 	while (input[i]!=0)
 	{
