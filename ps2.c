@@ -130,7 +130,7 @@ int main(void)
 			_delay_ms(500);
 		}
 		
-		if (button==206 || button==248)
+		if (button==206 || button==62)
 		{
 			dirDpad=checkSpeed(button,dirDpad);
 		}
