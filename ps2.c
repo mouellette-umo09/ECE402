@@ -32,19 +32,8 @@ volatile int secondFlag;//flag that goes high every second
 volatile int average; //past 16 averaged ADC values
 volatile int finalAverage;//averaged ADC value to pass to PC
 volatile int seconds;//time in seconds for timestamping data
-double voltage;//voltage read to pass to PC
-double temperature; //temp to pass to PC (from finalAverage)
-volatile int samplecounter; //counts up to 16 for average of values
-volatile int values[16];
-double degree; //converts voltage ADC measurement to degree value
 double desired; //holds desired degree
-
-int byte4;
-int byte5;
-int byte6;
-int byte7;
-int byte8;
-int byte9;
+int samplecounter; //counts up to 16 for average of values
 
 
 
@@ -70,6 +59,16 @@ int byte9;
 
 int main(void)
 {
+	int dpad=7;			//determines the position of front motor
+	int button;			//holds output from the controller
+	int dirDpad=0;			//integer to hold current motor direction
+	
+	double degree; //converts voltage ADC measurement to degree value
+	double voltage;//voltage read to pass to PC
+
+	char buf2[70];
+	char buf[100];
+	
 	//functions to initialize avr for all functions
 	init_serial();
 	init_ports();
@@ -92,17 +91,8 @@ int main(void)
 	
 	_delay_ms(100);
 	
-	int dpad=7;			//determines the position of front motor
-	int button;			//holds output from the controller
-	int turn=0;
-	int dirDpad=0;			//integer to hold current motor direction
-
-	char buf2[70];
-	char buf[100];
-	
 	samplecounter=0;
 	voltage=0;
-	temperature=0;
 	finalAverage=0;
 	seconds=0;//variable to hold the current second being passed
 	secondFlag=0;
@@ -130,7 +120,7 @@ int main(void)
 			_delay_ms(500);
 		}
 		
-		if (button==206 || button==62)
+		if (button==206 || button==62 || button==252)
 		{
 			dirDpad=checkSpeed(button,dirDpad);
 		}
@@ -155,7 +145,7 @@ int main(void)
 		}
 		
 		//gets ADC value on each iteration
-		value=getADC();			
+		getADC();			
 			
 	}
 	
@@ -179,6 +169,7 @@ int checkSpeed(int button, int dirDpad)
 	//if up is pressed, forward motor direction is wanted
 	if (button==62)
 		nextDir=2;
+		
 	
 	//only changes motor direction and speed for proper controller inputs 
 	if (nextDir==1 || nextDir==2)
@@ -226,6 +217,12 @@ int checkSpeed(int button, int dirDpad)
 	
 	}
 
+	//pressing select will turn motor off
+	if (button==252)
+	{
+		OCR1B=0;
+		OCR0=0;
+	}
 
 	//sprintf(buf,"dirDpad: %d , nextDir: %d, OCR1B: %d, OCR0: %d , button: %d\n\r",dirDpad,nextDir,OCR1B,OCR0,button);
     	//my_send_string(buf);
@@ -236,13 +233,18 @@ int checkSpeed(int button, int dirDpad)
 //returns ADC value from pin A0 and averages the values to get more accurate results
 int getADC()
 {
-	ADCSRA |= (1<<ADSC);
+	int values[16];
+	int reading,i;
 	
-	while (!(ADCSRA & (1<<ADIF)));
+	//starts ADC conversion
+	ADCSRA |= (1<<ADSC);			
 	
+	//waits until ADC conversion is complete (ADIF flag is set when conversion is ready)
+	while (!(ADCSRA & (1<<ADIF)));		
+	
+	//clears the ADIF by writing a 1 to it (so next conversion will be able to run)
 	ADCSRA|=(1<<ADIF);
 		
-	int reading,i;
 	reading=(ADCH<<8)+ADCL;//stores value from  A/D conversion
 
 	samplecounter++;//increments through 16 values
@@ -257,7 +259,9 @@ int getADC()
 	}
 	average>>=4; //divides by 16 to get average value
 	
-	finalAverage=average;  //stores the averaged value (it is volatile variable that can be accessed outside of the function)
+	finalAverage=reading;  //stores the averaged value (it is variable that can be accessed outside of the function)
+	
+	_delay_ms(500);
 	
 	return ADC;
 }
@@ -296,6 +300,15 @@ int checkDpad(int button, int dpad)
 //reads from the controller and returns the value
 int readController(void)
 {
+     
+    //holds data returned from controller (button presses)
+    int byte4;
+    int byte5;
+    int byte6;
+    int byte7;
+    int byte8;
+    int byte9;
+
     char buf[70];
     int temp;
 
@@ -327,6 +340,7 @@ void moveMotor()
 {
 	//sets direction motor to approx 90 to start
 	OCR1A=196;
+	
 	//turns back motor off initially
 	OCR1B=0;
 	OCR0=0;
@@ -469,7 +483,7 @@ void dPadTurn(int dpad)
 		//OCR1A value for 62 degrees
 		case 0:
 	    desired=62;
-	    OCR1A=165;
+	    OCR1A=159;
 	    LCD_position(1,2);
 	    LCD_print("d: 62 ");
 	    break;
@@ -478,35 +492,35 @@ void dPadTurn(int dpad)
 	    desired=66;
 	    LCD_position(1,2);
 	    LCD_print("d: 66 ");
-            OCR1A=170;
+            OCR1A=164;
             break;
 	    	//OCR1A value for 70 degrees
 		case 2:
 	    LCD_position(1,2);
 	    desired=70;
 	    LCD_print("d: 70 ");
-            OCR1A=174;
+            OCR1A=170;
             break;
 	    	//OCR1A value for 74 degrees
 		case 3:
 	    LCD_position(1,2);
 	    desired=74;
 	    LCD_print("d: 74 ");
-            OCR1A=178;
+            OCR1A=174;
             break;
 	    	//OCR1A value for 78 degrees
 		case 4:
 	    LCD_position(1,2);
 	    desired=78;
 	    LCD_print("d: 78 ");
-            OCR1A=183;
+            OCR1A=180;
             break;
 	    	//OCR1A value for 82 degrees
 		case 5:
 	    LCD_position(1,2);
 	    desired=82;
 	    LCD_print("d: 82 ");
-            OCR1A=187;
+            OCR1A=185;
             break;
 	    	//OCR1A value for 86 degrees
 		case 6:
@@ -534,21 +548,21 @@ void dPadTurn(int dpad)
             LCD_position(1,2);
 	    desired=98;
 	    LCD_print("d: 98 ");
-            OCR1A=205;
+            OCR1A=206;
             break;
 	    	//OCR1A value for 102 degrees
 		case 10:
 	    LCD_position(1,2);
 	    desired=102;
 	    LCD_print("d: 102 ");
-            OCR1A=210;
+            OCR1A=212;
             break;
 	    	//OCR1A value for 106 degrees
 		case 11:
 	    LCD_position(1,2);
 	    desired=106;
 	    LCD_print("d: 106 ");
-            OCR1A=216;
+            OCR1A=218;
             break;
 	    	//OCR1A value for 110 degrees
 		case 12:
@@ -569,7 +583,7 @@ void dPadTurn(int dpad)
 	    LCD_position(1,2);
 	    desired=118;
 	    LCD_print("d: 118 ");
-            OCR1A=233;
+            OCR1A=236;
             break;
 	}
 }
@@ -581,7 +595,7 @@ ISR(TIMER2_COMP_vect)
 	overflows++;
 	//when 250 overflows are done then a second has passed
 	//so data will be sent serially at this point
-	if (overflows>=500)//should be 125(1MHz) 250 at 8MHz
+	if (overflows>=250)//should be 125(1MHz) 250 at 8MHz
 	{
 		finalAverage=average;
 		secondFlag=1;
