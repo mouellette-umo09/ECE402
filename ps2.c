@@ -25,6 +25,7 @@ int checkTurn(int button, int turn);
 void init_A2D(void);
 void init_timer2(void);
 int getADC(void);
+int checkSpeed(int button,int dirDpad);
 
 volatile int overflows; //counts number of overflows
 volatile int secondFlag;//flag that goes high every second
@@ -36,7 +37,7 @@ double temperature; //temp to pass to PC (from finalAverage)
 volatile int samplecounter; //counts up to 16 for average of values
 volatile int values[16];
 double degree; //converts voltage ADC measurement to degree value
-double desired;
+double desired; //holds desired degree
 
 int byte4;
 int byte5;
@@ -78,6 +79,7 @@ int main(void)
 	init_LCDports();
 	
 	_delay_ms(50);
+	
 	//initializes LCD for communication
 	init_LCD();
 	
@@ -90,9 +92,10 @@ int main(void)
 	
 	_delay_ms(100);
 	
-	int dpad=7;
-	int button;
+	int dpad=7;			//determines the position of front motor
+	int button;			//holds output from the controller
 	int turn=0;
+	int dirDpad=0;			//integer to hold current motor direction
 
 	char buf2[70];
 	char buf[100];
@@ -106,6 +109,7 @@ int main(void)
 	degree=90;
 	desired=90;
 	
+	
 	int value;
 	
 	sei();
@@ -117,18 +121,24 @@ int main(void)
 		button=readController();
 		_delay_ms(1000);
 		
-		dpad=checkDpad(button,dpad);
-		_delay_ms(500);
-		
-		//turn=checkTurn(button,turn);
-		//_delay_ms(500);
+		if (button==126 || button==158)
+		{
+			dpad=checkDpad(button,dpad);
+			_delay_ms(500);
 
-		dPadTurn(dpad);
-		_delay_ms(500);
-
+			dPadTurn(dpad);
+			_delay_ms(500);
+		}
 		
+		if (button==206 || button==248)
+		{
+			dirDpad=checkSpeed(button,dirDpad);
+		}
+
+		//every second the LCD will update with the feedback ADC value
 		if (secondFlag==1)
 		{
+			//converts the ADC value to a voltage, then a degree
 			voltage=(((double)finalAverage)*1.94)/1024;
 			degree=voltage*139.96-73.7;
 			
@@ -136,6 +146,7 @@ int main(void)
 			//sprintf(buf,"%d,%d,%lf\n\r",seconds,finalAverage,voltage);
 			//my_send_string(buf);
 			
+			//prints degree value to LCD
 			sprintf(buf2,"a: %lf",degree);
 			LCD_position(2,2);
 			LCD_print(buf2);	
@@ -143,6 +154,7 @@ int main(void)
 			secondFlag=0;	
 		}
 		
+		//gets ADC value on each iteration
 		value=getADC();			
 			
 	}
@@ -151,6 +163,77 @@ int main(void)
 	return 0;
 }
 
+//reads data from controller, if up is pressed motor moves forward, if down is pressed motor moves backwards
+//dirDpad=1 for forward, dirDpad=2 for reverse
+int checkSpeed(int button, int dirDpad)
+{
+	char buf[70];
+	
+	//holds the desired motor direction based on controller input
+	int nextDir=0;
+	
+	//if up is pressed, forward motor direction is wanted	
+	if (button==206)
+		nextDir=1;
+		
+	//if up is pressed, forward motor direction is wanted
+	if (button==62)
+		nextDir=2;
+	
+	//only changes motor direction and speed for proper controller inputs 
+	if (nextDir==1 || nextDir==2)
+	{	
+		//indicates a desired change in direction
+		if(nextDir!=dirDpad)
+		{
+			//both PWMs need to be reset to zero to avoid a short of the motor
+			OCR1B=0;
+			OCR0=0;
+			
+			_delay_ms(1000);
+				
+			//sets OCR1B to initial value to start the motor forwards
+			if(nextDir==1)
+			{
+				OCR1B=1000;
+				OCR0=0;
+			}
+			
+			//sets OCR0 to initial value to start the motor in reverse	
+			if(nextDir==2)
+			{
+				OCR0=180;
+				OCR1B=0;
+			}
+			
+		}
+		//indicates a desired speed increase
+		if(nextDir==dirDpad)
+		{
+			//increases speed forwards
+			if (nextDir==1&&OCR1B<=200000)
+				OCR1B+=250;
+				
+			//increases speed in reverse
+			if (nextDir==2&&OCR0<=245)
+				OCR0+=5;
+		
+		
+		}
+		
+		//updates current direction in dirDpad
+		dirDpad=nextDir;
+	
+	}
+
+
+	//sprintf(buf,"dirDpad: %d , nextDir: %d, OCR1B: %d, OCR0: %d , button: %d\n\r",dirDpad,nextDir,OCR1B,OCR0,button);
+    	//my_send_string(buf);
+	
+	return dirDpad;
+}
+
+//returns ADC value from pin A0 and averages the values to get more accurate results
 int getADC()
 {
 	ADCSRA |= (1<<ADSC);
@@ -174,25 +257,29 @@ int getADC()
 	}
 	average>>=4; //divides by 16 to get average value
 	
-	finalAverage=ADC; 
+	finalAverage=average;  //stores the averaged value (it is volatile variable that can be accessed outside of the function)
 	
 	return ADC;
 }
 
+//checks returned value from controller to see if it is either a left or right dpad press for turning
 int checkDpad(int button, int dpad)
 {
 	char buf[70];
 
+	//decreases dpad variable if left dpad button is pressed
 	if (button==126)
 	{
 		dpad--;
 	}
 
+	//increases dpad variable if right dpad button is pressed
 	if (button==158)
 	{
 		dpad++;
 	}
 
+	//makes sure dpad variable is between 0 and 14
 	if (dpad>14)
 		dpad=14;
 
@@ -205,18 +292,8 @@ int checkDpad(int button, int dpad)
 	return dpad;
 }
 
-int checkTurn(int button, int turn)
-{
-	if (button==126)
-        turn=1;
-	else if (button==158)
-        turn=2;
-	else
-		turn=0;
 
-	return turn;
-}
-
+//reads from the controller and returns the value
 int readController(void)
 {
     char buf[70];
@@ -245,10 +322,14 @@ int readController(void)
     return byte4;
 }
 
+//initializes the motor to be approx. 90 degrees
 void moveMotor()
 {
-
+	//sets direction motor to approx 90 to start
 	OCR1A=196;
+	//turns back motor off initially
+	OCR1B=0;
+	OCR0=0;
 
 }
 
@@ -260,6 +341,9 @@ void init_PWM(void)
     TCCR1B |= (1<<WGM13) | (1<<WGM12) | (1<<CS11) | (1<<CS10); //setting CS11 & CS10 gives a prescaler of 64
 
     ICR1=2499; //value controls frequency of the PWM, value of 2499 sets frequency to 50Hz(20ms period)
+    
+    //initializes Timer0 for PWM0
+    TCCR0 |= (1<<CS01) | (1<<CS00) |(1<<WGM00) | (1<<WGM01) | (1<<COM01); //sets up fast non-inverting PWM with prescaler of 8
 }
                            
 
@@ -277,11 +361,12 @@ void init_serial(void)
 }
 
 
-//sets up ports for
+//sets up ports for use
 void init_ports(void)
 {	
-	DDRD=0b00100000; //OCR1A as output for motor control	
+	DDRD=0b00110000; //OCR1A and OCR1B as outputs for motor control		
 	DDRC=0b11101011; //Sets ACK and Data to inputs, CMD CLK and ATT are outputs
+	DDRB=0b00001000;  //sets OCR0 as output for h-bridge control
 }
 
 //sets up registers for adc conversions
