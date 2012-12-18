@@ -34,6 +34,7 @@ volatile int finalAverage;//averaged ADC value to pass to PC
 volatile int seconds;//time in seconds for timestamping data
 double desired; //holds desired degree
 int samplecounter; //counts up to 16 for average of values
+int values[16];
 
 
 
@@ -129,8 +130,8 @@ int main(void)
 		if (secondFlag==1)
 		{
 			//converts the ADC value to a voltage, then a degree
-			voltage=(((double)finalAverage)*1.94)/1024;
-			degree=voltage*139.96-73.7;
+			voltage=(((double)finalAverage)*1.95)/1024;
+			degree=voltage*142-70;
 			
 			//send data serially
 			//sprintf(buf,"%d,%d,%lf\n\r",seconds,finalAverage,voltage);
@@ -233,7 +234,6 @@ int checkSpeed(int button, int dirDpad)
 //returns ADC value from pin A0 and averages the values to get more accurate results
 int getADC()
 {
-	int values[16];
 	int reading,i;
 	
 	//starts ADC conversion
@@ -259,7 +259,7 @@ int getADC()
 	}
 	average>>=4; //divides by 16 to get average value
 	
-	finalAverage=reading;  //stores the averaged value (it is variable that can be accessed outside of the function)
+	finalAverage=average;  //stores the averaged value (it is variable that can be accessed outside of the function)
 	
 	_delay_ms(500);
 	
@@ -381,12 +381,13 @@ void init_ports(void)
 	DDRD=0b00110000; //OCR1A and OCR1B as outputs for motor control		
 	DDRC=0b11101011; //Sets ACK and Data to inputs, CMD CLK and ATT are outputs
 	DDRB=0b00001000;  //sets OCR0 as output for h-bridge control
+	DDRA=0b11110000;
 }
 
 //sets up registers for adc conversions
 void init_A2D(void)
 {
-	ADCSRA |= (1<<ADPS2)|(1<<ADPS1)|(1<<ADPS0) ; //sets prescaler to 64 (125kHz for 8MHz clock)
+	ADCSRA |= (1<<ADPS2)|(1<<ADPS1) ; //sets prescaler to 128
 	ADMUX = 0x00; //sets ADC reference voltage to AREF, and input to ADC0 (PA0)
 	//ADCSRA |= (1<<ADIE); //enables interrupts for conversion
 	ADCSRA |= (1<<ADEN); //enables conversions
